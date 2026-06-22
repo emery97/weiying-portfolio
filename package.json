@@ -9,11 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@notionhq/client": "^4.0.2",
+    "@notionhq/client": "^5.22.0",
+    "cloudinary": "^2.10.0",
     "framer-motion": "^12.23.24",
     "next": "16.2.9",
+    "notion-client": "^7.10.0",
+    "notion-utils": "^7.10.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-notion-x": "^7.10.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
