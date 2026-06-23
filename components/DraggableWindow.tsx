@@ -15,6 +15,7 @@ type DraggableWindowProps = {
   bodyClassName?: string;
   drawMode?: boolean;
   onClick?: () => void;
+  onClose?: () => void;
 };
 
 function resolvePosition(value: PositionValue, viewport: number): number {
@@ -50,6 +51,7 @@ export default function DraggableWindow({
   bodyClassName = "",
   drawMode = false,
   onClick,
+  onClose,
 }: DraggableWindowProps) {
   const ref = useRef<HTMLDivElement>(null);
   const draggedRef = useRef(false);
@@ -177,7 +179,19 @@ export default function DraggableWindow({
     >
       <div className="flex items-center gap-2 border-b border-white/[0.1] px-[10px] py-[6px]">
         <div className="flex gap-[5px]">
-          <span className="h-2 w-2 rounded-full bg-[#ff5f57]" />
+          {onClose ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="h-2 w-2 rounded-full bg-[#ff5f57] hover:brightness-110 active:scale-90 transition-transform cursor-pointer"
+              aria-label="Close"
+            />
+          ) : (
+            <span className="h-2 w-2 rounded-full bg-[#ff5f57]" />
+          )}
           <span className="h-2 w-2 rounded-full bg-[#febc2e]" />
           <span className="h-2 w-2 rounded-full bg-[#28c840]" />
         </div>

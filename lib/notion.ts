@@ -1,20 +1,13 @@
 import { Client } from "@notionhq/client";
 
-export type GuestbookEntry = {
-  id: string;
-  name: string;
-  message: string;
-  date: string;
-};
-
 export type Project = {
   id: string;
-  title: string;
-  description: string;
-  tag: string;
-  imageUrl: string;
-  order: number;
-  linkUrl?: string;
+  title: string;       // Maps to "Name" or "Title"
+  description: string; // Maps to "Description"
+  techStack: string[]; // Maps to "Tech Stack" (string array)
+  imageUrl: string;    // Maps to "Image" or "Image URL"
+  githubLink: string;  // Maps to "Github Link"
+  demoLink?: string;   // Maps to "Demo Link"
 };
 
 export const fallbackProjects: Project[] = [
@@ -22,41 +15,53 @@ export const fallbackProjects: Project[] = [
     id: "ocli",
     title: "OCLI — Ocular Cognitive Load",
     description: "Webcam-based BCI workload detection",
-    tag: "AI / ML",
+    techStack: ["AI / ML", "Python", "FastAPI", "OpenCV"],
     imageUrl: "/images/ocli.png",
-    order: 1,
+    githubLink: "https://github.com/emery97/ocli",
+    demoLink: "https://ocli.dev",
   },
   {
     id: "linked",
     title: "Linked — Browser Extension",
     description: "Swipe-based job discovery w/ AI",
-    tag: "HACKATHON",
+    techStack: ["HACKATHON", "React", "Chrome Extension", "Gemini API"],
     imageUrl: "/images/linked.png",
-    order: 2,
+    githubLink: "https://github.com/emery97/linked",
+    demoLink: "https://linked-extension.com",
   },
   {
     id: "lac",
     title: "Little Acts Collective",
     description: "Peer-led volunteer initiative, SG",
-    tag: "SOCIAL GOOD",
+    techStack: ["SOCIAL GOOD", "Next.js", "TailwindCSS", "Notion API"],
     imageUrl: "/images/lac.png",
-    order: 3,
+    githubLink: "https://github.com/emery97/lac",
   },
   {
     id: "til-ai",
     title: "TIL-AI NLP Challenge",
     description: "Pure retrieval RAG, QA score 0.898",
-    tag: "COMPETITION",
+    techStack: ["COMPETITION", "Python", "RAG", "NLP"],
     imageUrl: "",
-    order: 4,
+    githubLink: "https://github.com/emery97/til-ai",
   },
 ];
 
-const notionToken = process.env.NOTION_API_KEY;
+function getNotionConfig() {
+  const token = process.env.NOTION_KEY?.trim();
+  const projectsDatabaseId = process.env.NOTION_PROJECTS_DB_ID?.trim();
+  console.log(`projectsDatabaseID: ${projectsDatabaseId}`)
+  return {
+    token,
+    projectsDatabaseId,
+    isConfigured: Boolean(token && projectsDatabaseId),
+  };
+}
 
-export const notion = notionToken
-  ? new Client({ auth: notionToken })
-  : null;
+function getNotionClient(): Client | null {
+  const { token } = getNotionConfig();
+  return token ? new Client({ auth: token }) : null;
+}
 
 type RichTextPart = {
   plain_text?: string;
@@ -67,11 +72,19 @@ type NotionProperty = {
   title?: RichTextPart[];
   rich_text?: RichTextPart[];
   select?: { name?: string } | null;
+  multi_select?: { name?: string }[] | null;
   url?: string | null;
   number?: number | null;
   created_time?: string | null;
+  files?: {
+    name: string;
+    type: string;
+    file?: { url: string };
+    external?: { url: string };
+  }[] | null;
 };
 
+// Helper function to get notion property
 function notionProperty(property: unknown): NotionProperty | null {
   if (typeof property !== "object" || !property) {
     return null;
@@ -80,6 +93,7 @@ function notionProperty(property: unknown): NotionProperty | null {
   return property as NotionProperty;
 }
 
+// Helper function to get raw unformatted strings from NotionProperty structures
 function plainText(property: unknown): string {
   const propertyValue = notionProperty(property);
 
@@ -107,18 +121,45 @@ function plainText(property: unknown): string {
   return "";
 }
 
-function numberValue(property: unknown): number {
+function multiSelectValues(property: unknown): string[] {
   const propertyValue = notionProperty(property);
+  if (!propertyValue) return [];
 
-  return propertyValue?.type === "number" ? (propertyValue.number ?? 0) : 0;
+  if (propertyValue.type === "multi_select" && Array.isArray(propertyValue.multi_select)) {
+    return propertyValue.multi_select.map((part) => part.name ?? "").filter(Boolean);
+  }
+
+  if (propertyValue.type === "select" && propertyValue.select?.name) {
+    return [propertyValue.select.name];
+  }
+
+  if (propertyValue.type === "rich_text") {
+    const text = plainText(property);
+    return text ? text.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  }
+
+  return [];
 }
 
-function createdTime(property: unknown): string {
+function imageUrlValue(property: unknown): string {
   const propertyValue = notionProperty(property);
+  if (!propertyValue) return "";
 
-  return propertyValue?.type === "created_time"
-    ? (propertyValue.created_time ?? "")
-    : "";
+  if (propertyValue.type === "files" && Array.isArray(propertyValue.files) && propertyValue.files.length > 0) {
+    const file = propertyValue.files[0];
+    if (file.type === "file" && file.file) {
+      return file.file.url;
+    }
+    if (file.type === "external" && file.external) {
+      return file.external.url;
+    }
+  }
+
+  if (propertyValue.type === "url") {
+    return propertyValue.url ?? "";
+  }
+
+  return plainText(property);
 }
 
 function pageProperties(page: unknown): Record<string, unknown> {
@@ -143,112 +184,67 @@ function pageId(page: unknown): string {
   return crypto.randomUUID();
 }
 
-export async function getGuestbookEntries(): Promise<GuestbookEntry[]> {
-  if (!notion || !process.env.NOTION_GUESTBOOK_DB_ID) {
-    return [];
-  }
+type NotionQueryResponse = {
+  results: unknown[];
+};
 
-  const response = await notion.databases.query({
-    database_id: process.env.NOTION_GUESTBOOK_DB_ID,
-    sorts: [{ property: "Date", direction: "descending" }],
-  });
-
-  return response.results.map((page) => {
-    const properties = pageProperties(page);
-
-    return {
-      id: pageId(page),
-      name: plainText(properties.Name) || "ANON",
-      message: plainText(properties.Message),
-      date: createdTime(properties.Date),
-    };
-  });
-}
-
-export async function createGuestbookEntry(
-  name: string,
-  message: string,
-): Promise<GuestbookEntry> {
-  if (!notion || !process.env.NOTION_GUESTBOOK_DB_ID) {
-    return {
-      id: crypto.randomUUID(),
-      name,
-      message,
-      date: new Date().toISOString(),
-    };
-  }
-
-  const page = await notion.pages.create({
-    parent: { database_id: process.env.NOTION_GUESTBOOK_DB_ID },
-    properties: {
-      Name: {
-        title: [{ text: { content: name } }],
-      },
-      Message: {
-        rich_text: [{ text: { content: message } }],
-      },
-    },
-  });
-
-  return {
-    id: pageId(page),
-    name,
-    message,
-    date: new Date().toISOString(),
-  };
+function isNotionQueryResponse(response: unknown): response is NotionQueryResponse {
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "results" in response &&
+    Array.isArray(response.results)
+  );
 }
 
 export async function getProjects(): Promise<Project[]> {
-  if (!notion || !process.env.NOTION_PROJECTS_DB_ID) {
+  const config = getNotionConfig();
+  const notion = getNotionClient();
+
+  if (!config.token || !config.projectsDatabaseId || !notion) {
+    console.error("Notion not configured", {
+      hasToken: Boolean(config.token),
+      hasProjectsDatabaseId: Boolean(config.projectsDatabaseId),
+    });
     return fallbackProjects;
   }
 
-  const response = await notion.databases.query({
-    database_id: process.env.NOTION_PROJECTS_DB_ID,
-    sorts: [{ property: "Order", direction: "ascending" }],
-  });
+  try {
+    const response: unknown = await notion.dataSources.query({
+      data_source_id: config.projectsDatabaseId,
+    });
 
-  const projects = response.results.map((page) => {
-    const properties = pageProperties(page);
+    if (!isNotionQueryResponse(response)) {
+      return fallbackProjects;
+    }
 
-    return {
-      id: pageId(page),
-      title: plainText(properties.Title),
-      description: plainText(properties.Description),
-      tag: plainText(properties.Tag),
-      imageUrl: plainText(properties["Image URL"]),
-      order: numberValue(properties.Order),
-      linkUrl: plainText(properties["Link URL"]) || undefined,
-    };
-  });
+    const projects = response.results.map((page) => {
+      const properties = pageProperties(page);
 
-  return projects.length > 0 ? projects : fallbackProjects;
-}
+      // Extract properties with check for multiple likely names
+      const titleProp = properties.Name ?? properties.Title ?? properties.title;
+      const descProp = properties.Description ?? properties.description;
+      const techStackProp = properties.techStack ?? properties["Tech Stack"] ?? properties.TechStack;
+      const imageProp = properties.Image ?? properties["Image URL"] ?? properties.imageUrl ?? properties.image;
+      const githubProp = properties["Github Link"] ?? properties.githubLink ?? properties.GithubLink ?? properties.GitHub ?? properties.github;
+      const demoProp = properties["Demo Link"] ?? properties.demoLink ?? properties.DemoLink ?? properties.LinkURL ?? properties["Link URL"] ?? properties.linkUrl ?? properties.demo;
 
-export async function incrementVisits(): Promise<number> {
-  if (!notion || !process.env.NOTION_VISITS_DB_ID) {
-    return 1;
+      const techStack = multiSelectValues(techStackProp);
+
+      return {
+        id: pageId(page),
+        title: plainText(titleProp) || "Untitled Project",
+        description: plainText(descProp) || "",
+        techStack: techStack,
+        imageUrl: imageUrlValue(imageProp) || "",
+        githubLink: plainText(githubProp) || "",
+        demoLink: plainText(demoProp) || undefined,
+      };
+    });
+
+    return projects.length > 0 ? projects : fallbackProjects;
+  } catch (error) {
+    console.error("Error fetching projects from Notion:", error);
+    return fallbackProjects;
   }
-
-  const response = await notion.databases.query({
-    database_id: process.env.NOTION_VISITS_DB_ID,
-    page_size: 1,
-  });
-
-  const page = response.results[0];
-  if (!page) {
-    return 1;
-  }
-
-  const properties = pageProperties(page);
-  const count = numberValue(properties.Count) + 1;
-
-  await notion.pages.update({
-    page_id: pageId(page),
-    properties: {
-      Count: { number: count },
-    },
-  });
-
-  return count;
 }
