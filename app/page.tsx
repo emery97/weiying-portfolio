@@ -3,8 +3,10 @@
 import AboutWindow from "@/components/AboutWindow";
 import DraggableWindow from "@/components/DraggableWindow";
 import DrawCanvas from "@/components/DrawCanvas";
+import JourneyWidget from "@/components/JourneyWidget";
 import ProjectWindow from "@/components/ProjectWindow";
 import SkillsWindow from "@/components/SkillsWindow";
+import { Journey, fallbackJourney } from "@/lib/backend/models/journey.model";
 import { Project, fallbackProjects } from "@/lib/backend/models/project.model";
 import { useEffect, useState } from "react";
 
@@ -88,12 +90,14 @@ export default function Home() {
   const [drawMode, setDrawMode] = useState(false);
   const [guestbookOpen, setGuestbookOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>(fallbackProjects);
+  const [journeys, setJourneys] = useState<Journey[]>(fallbackJourney);
 
   // Layout Toggle State Managers
   const [showProjects, setShowProjects] = useState(false);
   const [showVolunteers, setShowVolunteers] = useState(false);
   const [showEvents, setShowEvents] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showJourney, setShowJourney] = useState(false);
 
   // Closed sub-widgets tracker
   const [closedProjects, setClosedProjects] = useState<string[]>([]);
@@ -117,6 +121,17 @@ export default function Home() {
         }
       })
       .catch(() => setProjects(fallbackProjects));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/journeys")
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data.journeys) && data.journeys.length > 0) {
+          setJourneys(data.journeys);
+        }
+      })
+      .catch(() => setJourneys(fallbackJourney));
   }, []);
 
   const getProjectPosition = (index: number) => {
@@ -150,6 +165,7 @@ export default function Home() {
     setShowVolunteers(false);
     setShowEvents(false);
     setShowAbout(false);
+    setShowJourney(false);
     setClosedProjects([]);
     setClosedVolunteers([]);
   };
@@ -216,6 +232,7 @@ export default function Home() {
             setShowVolunteers(false);
             setShowEvents(false);
             setShowAbout(nextState);
+            setShowJourney(nextState);
           }}
           className={`w-[130px] hover:border-white/40 transition-colors select-none ${showAbout ? "border-white/50 bg-white/5" : ""}`}
         >
@@ -234,6 +251,7 @@ export default function Home() {
           onClick={() => {
             const nextState = !showProjects;
             setShowAbout(false);
+            setShowJourney(false);
             setShowVolunteers(false);
             setShowEvents(false);
             setShowProjects(nextState);
@@ -256,6 +274,7 @@ export default function Home() {
             const nextState = !showVolunteers;
             setShowProjects(false);
             setShowAbout(false);
+            setShowJourney(false);
             setShowEvents(false);
             setShowVolunteers(nextState);
           }}
@@ -277,6 +296,7 @@ export default function Home() {
             const nextState = !showEvents;
             setShowProjects(false);
             setShowAbout(false);
+            setShowJourney(false);
             setShowVolunteers(false);
             setShowEvents(nextState);
           }}
@@ -335,6 +355,19 @@ export default function Home() {
                 <span>STATUS: ACTIVE</span>
               </div>
             </div>
+          </DraggableWindow>
+        )}
+
+        {/* journey.md Timeline Window, opened with about.md */}
+        {showJourney && (
+          <DraggableWindow
+            id="journey-window"
+            title="journey_timeline.md"
+            defaultPosition={{ x: "32%", y: 120 }}
+            drawMode={drawMode}
+            onClose={() => setShowJourney(false)}
+          >
+            <JourneyWidget journeys={journeys} />
           </DraggableWindow>
         )}
 
@@ -466,6 +499,9 @@ export default function Home() {
               <p className="mt-2 text-white/40">
                 Incoming NUS Computer Science undergraduate with a passion for web engineering, civic technology, and creating digital interfaces that make volunteering accessible for all.
               </p>
+              <div className="mt-4 border-t border-white/[0.05] pt-4">
+                <JourneyWidget journeys={journeys} />
+              </div>
             </div>
           )}
         </section>
