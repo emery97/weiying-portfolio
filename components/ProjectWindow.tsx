@@ -1,6 +1,6 @@
 "use client";
 
-import type { Project } from "@/lib/notion";
+import { Project } from "@/lib/backend/models/project.model";
 import Image from "next/image";
 import { useState } from "react";
 

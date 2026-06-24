@@ -5,9 +5,7 @@ import DraggableWindow from "@/components/DraggableWindow";
 import DrawCanvas from "@/components/DrawCanvas";
 import ProjectWindow from "@/components/ProjectWindow";
 import SkillsWindow from "@/components/SkillsWindow";
-import Ticker from "@/components/Ticker";
-import type { Project } from "@/lib/notion";
-import { fallbackProjects } from "@/lib/notion";
+import { Project, fallbackProjects } from "@/lib/backend/models/project.model";
 import { useEffect, useState } from "react";
 
 type VolunteerExperience = {

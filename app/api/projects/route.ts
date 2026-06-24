@@ -1,4 +1,5 @@
-import { fallbackProjects, getProjects } from "@/lib/notion";
+import { getProjects } from "@/lib/backend/controllers/project.service";
+import { fallbackProjects } from "@/lib/backend/models/project.model";
 
 export const dynamic = "force-dynamic";
 
